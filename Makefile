@@ -15,6 +15,12 @@ $(GIT_HOOKS):
 	@scripts/install-git-hooks
 	@echo
 
+ins: all
+	@if [ "$(shell lsmod | grep 'fastecho')" ]; then sudo rmmod fastecho; fi
+	sudo insmod fastecho.ko
+rm:
+	sudo rmmod fastecho
+
 clean:
 	rm -f *.o *.ko *.mod.c *.symvers *.order .fastecho*
 	rm -fr .tmp_versions
