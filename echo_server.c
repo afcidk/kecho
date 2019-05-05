@@ -27,7 +27,10 @@ static int get_request(struct socket *sock, unsigned char *buf, size_t size)
     printk(MODULE_NAME ": start get response\n");
     /* get msg */
     length = kernel_recvmsg(sock, &msg, &vec, size, size, msg.msg_flags);
+    if (length)
+        buf[length - 1] = 0;
     printk(MODULE_NAME ": get request = %s\n", buf);
+    printk(MODULE_NAME ": length = %d\n", length);
 
     return length;
 }
