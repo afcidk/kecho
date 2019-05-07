@@ -29,6 +29,7 @@ module_param(backlog, ushort, S_IRUGO);
 struct echo_server_param param;
 struct socket *listen_sock;
 struct task_struct *echo_server;
+struct workqueue_struct *workqueue;
 
 static int open_listen(struct socket **);
 static void close_listen(struct socket *);
@@ -43,6 +44,8 @@ static int fastecho_init_module(void)
 
     param.listen_sock = listen_sock;
 
+    workqueue = alloc_workqueue(MODULE_NAME, WQ_UNBOUND, 0);
+
     echo_server = kthread_run(echo_server_daemon, &param, MODULE_NAME);
     if (IS_ERR(echo_server)) {
         printk(KERN_ERR MODULE_NAME ": cannot start server daemon\n");
@@ -56,6 +59,8 @@ static void fastecho_cleanup_module(void)
 {
     send_sig(SIGTERM, echo_server, 1);
     kthread_stop(echo_server);
+    flush_workqueue(workqueue);
+    destroy_workqueue(workqueue);
     close_listen(listen_sock);
 }
 

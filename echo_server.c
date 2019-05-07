@@ -6,6 +6,8 @@
 #include "fastecho.h"
 
 #define BUF_SIZE 4096
+extern struct data_struct data;
+extern struct workqueue_struct *workqueue;
 
 static int get_request(struct socket *sock, unsigned char *buf, size_t size)
 {
@@ -28,7 +30,7 @@ static int get_request(struct socket *sock, unsigned char *buf, size_t size)
     /* get msg */
     length = kernel_recvmsg(sock, &msg, &vec, size, size, msg.msg_flags);
     if (length)
-        buf[length - 1] = 0;
+        buf[length] = 0;
     printk(MODULE_NAME ": get request = %s\n", buf);
     printk(MODULE_NAME ": length = %d\n", length);
 
@@ -53,26 +55,27 @@ static int send_request(struct socket *sock, unsigned char *buf, size_t size)
     printk(MODULE_NAME ": start send request.\n");
 
     length = kernel_sendmsg(sock, &msg, &vec, 1, strlen(buf) - 1);
+    memset(buf, 0, sizeof(buf));
 
     printk(MODULE_NAME ": send request = %s\n", buf);
 
     return length;
 }
 
-static int echo_server_worker(void *arg)
+static void echo_server_worker(struct work_struct *work)
 {
     struct socket *sock;
     unsigned char *buf;
     int res;
 
-    sock = (struct socket *) arg;
+    sock = (struct socket *) container_of(work, struct data_struct, work)->data;
     allow_signal(SIGKILL);
     allow_signal(SIGTERM);
 
     buf = kmalloc(BUF_SIZE, GFP_KERNEL);
     if (!buf) {
         printk(KERN_ERR MODULE_NAME ": kmalloc error....\n");
-        return -1;
+        // return -1;
     }
 
     while (!kthread_should_stop()) {
@@ -98,14 +101,14 @@ static int echo_server_worker(void *arg)
     sock_release(sock);
     kfree(buf);
 
-    return 0;
+    // return 0;
 }
 
 int echo_server_daemon(void *arg)
 {
     struct echo_server_param *param = arg;
     struct socket *sock;
-    struct task_struct *thread;
+    // struct task_struct *thread;
     int error;
 
     allow_signal(SIGKILL);
@@ -121,13 +124,21 @@ int echo_server_daemon(void *arg)
             continue;
         }
 
+        struct data_struct *data =
+            kmalloc(sizeof(struct data_struct), GFP_KERNEL);
+        data->data = (void *) sock;
+        INIT_WORK(&(data->work), echo_server_worker);
+        queue_work(workqueue, &(data->work));
+
         /* start server worker */
+        /*
         thread = kthread_run(echo_server_worker, sock, MODULE_NAME);
         if (IS_ERR(thread)) {
             printk(KERN_ERR MODULE_NAME ": create worker thread error = %d\n",
                    error);
             continue;
         }
+        */
     }
 
     return 0;
